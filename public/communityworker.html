@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Community Worker</title>
+        <style>
+            .wrapper{
+                display: grid;
+                /*grid-template-columns: 60% 40%;*/
+                /*grid-template-columns: repeat(2, 1fr);*/
+                grid-template-columns: 3fr 2fr;
+                grid-column-gap: 1em;
+                grid-row-gap: 1em;
+                padding-left: 10%;
+                padding-right: 10%;
+                padding-top: 3em;
+            }
+            .wrapper > div{
+                background: #ffffff;
+                padding: 0.5em;
+            }
+            .wrapper > div:nth-child(odd){
+                background: #ffffff;
+            }
+            #suggestionBox{
+                background: #ffffff;
+                width: 100%;
+                height: 10em;
+                border: 0em;
+                resize: none;
+                
+            }
+            #suggestion{
+                background: #4CAF50;
+                color: #ffffff;
+            }
+
+            .titleBar{
+                background: #f3f3f3;
+                padding: 1em;
+                position: fixed;
+                right: 0px;
+                left: 0px;
+                top: 0px; 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            }
+
+
+        </style>
+        <script src="/socket.io/socket.io.js"></script>
+        
+        <script>
+            socket = io();
+
+            const config = {
+                'iceServers': [{
+                    'urls': ['stun:stun.l.google.com:19302']
+                }]
+            };
+            const peerConnection = new RTCPeerConnection(config);
+            
+            //var sendChannel = alice.createDataChannel('sendDataChannel');
+            var sendChannel = peerConnection.createDataChannel("sendDataChannel", {negotiated: true, id: 0});
+            var sendChannel2 = peerConnection.createDataChannel("sendDataChannel2", {negotiated: true, id: 1});
+            var channelSuggestion = peerConnection.createDataChannel("DataChannel3", {negotiated: true, id: 2});
+
+            channelSuggestion.onmessage = function(event){
+                document.getElementById("suggestionBox").value = event.data;
+            }
+
+            
+            
+            navigator.mediaDevices.getUserMedia({
+                video: true
+            })
+            .then(stream => {
+                document.getElementById('localVideo').srcObject = stream;
+                peerConnection.addStream(stream);
+
+            });
+            
+            socket.on('ready', function(){
+
+                peerConnection.createOffer()
+                .then(sdp => peerConnection.setLocalDescription(new RTCSessionDescription(sdp)))
+                .then(function(){
+                    socket.emit('offer', peerConnection.localDescription);
+                });
+
+                peerConnection.onicecandidate = e => {
+                if(e.candidate){
+                    socket.emit('candidate', e.candidate);
+                    //bob.addIceCandidate(e.candidate);
+                }
+                
+            }
+            });
+
+            socket.on('offer', function(description){
+                //add stream
+                //alice.addStream(document.getElementById('localVideo').srcObject);
+
+                peerConnection.setRemoteDescription(description);
+                peerConnection.createAnswer()
+                .then(sdp => peerConnection.setLocalDescription(sdp))
+                .then(function(){
+                    socket.emit('answer', peerConnection.localDescription);
+                });
+
+                peerConnection.onicecandidate = e => {
+                if(e.candidate){
+                    socket.emit('candidate', e.candidate);
+                    //bob.addIceCandidate(e.candidate);
+                }
+            }
+            });
+            
+            socket.on('candidate', function(candidate){
+                peerConnection.addIceCandidate(candidate);
+            });
+
+            socket.on('answer', function(description){
+                peerConnection.setRemoteDescription(description);
+            });
+
+
+            socket.emit('ready');
+
+
+            function sendMessage(){
+                var message = document.getElementById("dataChannelSend").value;
+                sendChannel.send(message);
+            }
+
+            function sendMessage2(){
+                var message = document.getElementById("dataChannelSend2").value;
+                sendChannel2.send(message);
+            }
+
+  
+  
+
+        </script>
+    </head>
+    <body>
+        <div class="titleBar">#PatientID : 12345<span style="float: right;">Community Worker</span></div>
+        <div class="wrapper">
+        <div>
+            <video id="localVideo" width="100%" autoplay></video>        
+        </div>
+        <div>
+            <p>Patient Details</p>
+            <p>Last Name<br>First Name<br>Blood Group<br>Contact</p>
+        </div>
+        
+        <div>
+                <textarea id="dataChannelSend" placeholder="Heartbeat"></textarea>
+
+                <button id="sendButton" onclick="sendMessage()">Send</button>
+            
+                <br>
+            
+                <textarea id="dataChannelSend2" placeholder="Temperature"></textarea>
+                <button id="sendButton2" onclick="sendMessage2()">Send</button>
+        </div>
+
+        <div id="suggestion">
+
+                <h2>Suggestions</h2>
+                <textarea id="suggestionBox" placeholder="No Suggestion" disabled></textarea>
+        </div>
+        
+    
+        
+        </div>
+    </body>
+</html>
